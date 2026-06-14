@@ -1,0 +1,1 @@
+java.base,java.management,java.naming,java.net.http,java.sql,java.security.sasl,java.security.jgss,java.desktop,java.instrument,java.scripting,java.xml,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.unsupported,jdk.zipfs,jdk.management,jdk.httpserver,java.management.rmi

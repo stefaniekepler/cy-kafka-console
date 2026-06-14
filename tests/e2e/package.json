@@ -1,0 +1,14 @@
+{
+  "name": "cy-kafka-console-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "wdio run wdio.conf.ts" },
+  "devDependencies": {
+    "@wdio/cli": "^9",
+    "@wdio/local-runner": "^9",
+    "@wdio/mocha-framework": "^9",
+    "@wdio/spec-reporter": "^9",
+    "ts-node": "^10",
+    "typescript": "^5.6"
+  }
+}

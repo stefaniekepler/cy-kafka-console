@@ -1,0 +1,109 @@
+# ============================================================
+# 多平台发布流水线 — Kafka Console
+# ============================================================
+#
+# 【首次发布前必须配置的 Secrets】
+#   TAURI_SIGNING_PRIVATE_KEY          — 更新器签名私钥（必需）
+#     开发用密钥位置：~/.tauri/cy-kafka-console.key
+#     开发用密码：    kafka-console-dev
+#     ⚠️  生产环境请用 `tauri signer generate` 生成全新密钥对！
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD — 对应密钥的密码（必需）
+#
+# 【自动更新端点】
+#   tauri.conf.json › plugins.updater.endpoints 中的 OWNER 占位符
+#   必须替换为真实 GitHub 仓库所有者（个人或组织名），否则
+#   in-app updater 无法获取 latest.json，自动更新不会生效。
+#   示例：将 "OWNER" 改为 "my-org"。
+#
+# 【可选的代码签名 Secrets（不配置仍可成功构建，但会有警告弹窗）】
+#   macOS（Gatekeeper）：
+#     APPLE_CERTIFICATE          — Base64 编码的 .p12 证书
+#     APPLE_CERTIFICATE_PASSWORD — .p12 证书密码
+#     APPLE_SIGNING_IDENTITY     — 签名身份字符串（Developer ID Application: ...）
+#     APPLE_ID                   — Apple ID 邮箱（用于公证 notarization）
+#     APPLE_PASSWORD             — App-specific password（appleid.apple.com 生成）
+#     APPLE_TEAM_ID              — Apple 开发者团队 ID
+#   Windows（SmartScreen）：
+#     （Tauri v2 Windows 签名通过 NSIS 安装程序自动处理，
+#      如需 EV 证书签名请参考 Tauri 官方文档配置 signtool 相关 secrets）
+#   未配置以上 secrets 时：构建照常完成，但用户首次安装时会收到
+#   Gatekeeper（macOS）或 SmartScreen（Windows）安全警告。
+# ============================================================
+
+name: Release
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            bundles: dmg
+          - os: macos-13
+            target: x86_64-apple-darwin
+            bundles: dmg
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            bundles: appimage,deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Linux 系统依赖
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: 拉取并校验 kafbat jar (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./scripts/fetch-kafbat-jar.sh
+      - name: 拉取并校验 kafbat jar (Windows)
+        if: runner.os == 'Windows'
+        run: ./scripts/fetch-kafbat-jar.ps1
+      - name: 构建 jlink JRE (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./scripts/build-jre.sh
+      - name: 构建 jlink JRE (Windows)
+        if: runner.os == 'Windows'
+        run: ./scripts/build-jre.ps1
+      - name: 安装前端依赖
+        run: npm ci
+      - name: 构建并发布
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 更新器签名（必需，用于 latest.json 与自动更新）
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # 可选 macOS 签名/公证：仅当 secrets 存在时生效，否则产出未签名包
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          tagName: ${{ github.ref_name }}
+          releaseName: "Kafka Console ${{ github.ref_name }}"
+          releaseDraft: true
+          includeUpdaterJson: true

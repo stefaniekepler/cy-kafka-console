@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="UTF-8" /><title>设置</title>
+    <style>
+      body{font-family:-apple-system,"Segoe UI",system-ui,sans-serif;margin:0;padding:24px;background:#1f2430;color:#e6e6e6}
+      h1{font-size:16px;margin:0 0 16px} label{display:block;font-size:13px;margin-bottom:6px}
+      input{width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid #3a4150;background:#161a22;color:#e6e6e6}
+      .hint{font-size:12px;color:#9aa4b2;margin-top:6px} .err{color:#ff6b6b}
+      .row{margin-top:16px;text-align:right} button{padding:6px 16px;border:0;border-radius:6px;cursor:pointer;background:#4f9cf9;color:#fff;margin-left:8px}
+      button.secondary{background:#3a4150}
+    </style>
+  </head>
+  <body>
+    <h1>JVM 最大堆内存</h1>
+    <label for="heap">最大堆（MB，128–8192）</label>
+    <input id="heap" type="number" min="128" max="8192" step="128" />
+    <div class="hint" id="hint">修改后将在下次启动应用时生效。</div>
+    <div class="row">
+      <button class="secondary" id="cancel">关闭</button>
+      <button id="save">保存</button>
+    </div>
+    <script type="module" src="/src/settings.ts"></script>
+  </body>
+</html>

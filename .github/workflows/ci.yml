@@ -1,0 +1,134 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  rust:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Linux 系统依赖
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: 安装 cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: fmt
+        run: cd src-tauri && cargo fmt --check
+      - name: clippy
+        run: cd src-tauri && cargo clippy --all-targets -- -D warnings
+      - name: 单测 + 覆盖率
+        # --lib 只覆盖库 crate；--ignore-filename-regex 排除无法单测的 Tauri 胶水文件
+        run: cd src-tauri && cargo llvm-cov --lib --ignore-filename-regex 'lib\.rs|main\.rs' --fail-under-lines 80
+
+  frontend:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:coverage
+
+  integration:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Linux 系统依赖
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev
+      - name: 拉取 kafbat jar (non-Windows)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./scripts/fetch-kafbat-jar.sh
+      - name: 构建 jlink JRE (non-Windows)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./scripts/build-jre.sh
+      - name: 拉取 kafbat jar (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/fetch-kafbat-jar.ps1
+      - name: 构建 jlink JRE (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/build-jre.ps1
+      - name: 集成测试 (Linux — Docker 可用，跑全部含 Kafka 容器)
+        if: runner.os == 'Linux'
+        run: cd src-tauri && cargo test --test integration_sidecar -- --ignored --nocapture
+      - name: 集成测试 (macOS/Windows — 无 Docker，仅跑免 Docker 版)
+        if: runner.os != 'Linux'
+        run: cd src-tauri && cargo test --test integration_sidecar backend_boots_on_bundled_runtime -- --ignored --nocapture
+
+  e2e:
+    # macOS 排除原因：Apple 未为 WKWebView 提供 WebDriver 实现，tauri-driver 无法在 macOS 上驱动应用。
+    # 参见设计文档 7.3 节。Linux + Windows 覆盖主要平台路径。
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Linux 系统依赖（包含 WebKit WebDriver 与 Xvfb）
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev webkit2gtk-driver xvfb
+      - name: 安装 tauri-driver
+        run: cargo install tauri-driver --locked
+      - name: 拉 jar + jlink + 构建应用 (non-Windows)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          ./scripts/fetch-kafbat-jar.sh
+          ./scripts/build-jre.sh
+          npm ci
+          npm run tauri build -- --no-bundle
+      - name: 拉 jar + jlink + 构建应用 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./scripts/fetch-kafbat-jar.ps1
+          ./scripts/build-jre.ps1
+          npm ci
+          npm run tauri build -- --no-bundle
+      - name: 安装 E2E 依赖
+        run: cd tests/e2e && npm ci
+      - name: 运行 E2E (Linux — Xvfb 无头显示)
+        if: runner.os == 'Linux'
+        env:
+          APP_BINARY: src-tauri/target/release/kafka-console
+        run: cd tests/e2e && xvfb-run -a npm test
+      - name: 运行 E2E (Windows)
+        if: runner.os == 'Windows'
+        env:
+          APP_BINARY: src-tauri/target/release/kafka-console.exe
+        run: cd tests/e2e && npm test
