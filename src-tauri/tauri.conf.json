@@ -21,7 +21,7 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": ["https://github.com/OWNER/cy-kafka-console/releases/latest/download/latest.json"],
+      "endpoints": ["https://github.com/stefaniekepler/cy-kafka-console/releases/latest/download/latest.json"],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc4NTUyNjdGMjFGRDVCRUUKUldUdVcvMGhmeVpWZUhjRzBqcEVZR3pTTTErR0FSRUZLSFVyTzVYa0g1TXZUNldMOU9JK2tWVEgK"
     }
   }
