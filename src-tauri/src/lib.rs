@@ -72,6 +72,56 @@ fn record_and_show_error(handle: &tauri::AppHandle, msg: String) {
     }
 }
 
+/// 注入到 kafbat-ui 主窗口的界面微调脚本（每次导航前在页面上下文执行）。
+/// 仅作用于顶栏 `[aria-label="Page Header"]`，不触碰页面其它内容：
+///   1) 隐藏版本块（黄色"版本过期"感叹号 + commit 短哈希 + 构建时间）；
+///   2) 隐藏主题切换之后的外部跳转入口（GitHub / Discord / ProductHunt），保留主题切换（非 <a>）。
+/// CSS（`:has` 整块命中、响应式无闪烁）为主，JS 设 inline-style 作 CSP 兜底，
+/// MutationObserver 兜住版本信息异步加载与 SPA 路由重渲染。
+const UI_TWEAKS_JS: &str = r#"(function () {
+  var STYLE_ID = "kc-ui-tweaks";
+  var CSS = [
+    '[aria-label="Page Header"] :has(> div > a[title="Current commit"]){display:none !important;}',
+    '[aria-label="Page Header"] [title^="Your app version is outdated"]{display:none !important;}',
+    '[aria-label="Page Header"] a[title="Current commit"]{display:none !important;}',
+    '[aria-label="Page Header"] a[target="_blank"]{display:none !important;}'
+  ].join("");
+  function injectStyle() {
+    if (!document.head || document.getElementById(STYLE_ID)) return;
+    var s = document.createElement("style");
+    s.id = STYLE_ID;
+    s.textContent = CSS;
+    document.head.appendChild(s);
+  }
+  function hardHide() {
+    var nav = document.querySelector('[aria-label="Page Header"]');
+    if (!nav) return;
+    var commit = nav.querySelector('a[title="Current commit"]');
+    if (commit && commit.parentElement && commit.parentElement.parentElement) {
+      commit.parentElement.parentElement.style.display = "none";
+    }
+    nav.querySelectorAll('[title^="Your app version is outdated"]').forEach(function (el) { el.style.display = "none"; });
+    nav.querySelectorAll('a[target="_blank"]').forEach(function (el) { el.style.display = "none"; });
+  }
+  function run() { injectStyle(); hardHide(); }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run);
+  } else {
+    run();
+  }
+  var scheduled = false;
+  var obs = new MutationObserver(function () {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(function () { scheduled = false; hardHide(); });
+  });
+  function startObserver() {
+    if (document.body) { injectStyle(); obs.observe(document.body, { childList: true, subtree: true }); }
+    else { setTimeout(startObserver, 50); }
+  }
+  startObserver();
+})();"#;
+
 /// 在后台线程执行阻塞式启动编排；成功建主窗口并关 splash，失败展示错误。可被重试复用。
 fn launch_startup(handle: tauri::AppHandle) {
     std::thread::spawn(move || {
@@ -89,6 +139,7 @@ fn launch_startup(handle: tauri::AppHandle) {
                         .title("Kafka Console")
                         .inner_size(1280.0, 820.0)
                         .center()
+                        .initialization_script(UI_TWEAKS_JS)
                         .build()
                     {
                         Ok(_) => {
