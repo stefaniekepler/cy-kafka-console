@@ -35,6 +35,11 @@ on:
   push:
     tags: ["v*"]
 
+# 允许 GITHUB_TOKEN 写仓库内容（创建 Release / 上传产物）。
+# 否则 tauri-action 创建 Release 时会报 “Resource not accessible by integration”。
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
