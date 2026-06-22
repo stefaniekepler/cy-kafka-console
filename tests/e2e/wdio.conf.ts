@@ -15,7 +15,9 @@ export const config: WebdriverIO.Config = {
   maxInstances: 1,
   capabilities: [
     {
-      browserName: "wry",
+      // 不要设 browserName（如 "wry"）—— 它不是底层 WebKitWebDriver 认识的浏览器名，
+      // 会在创建会话时被判为 “Failed to match capabilities”。"wry" 只是 driver 回报的
+      // 引擎名，不应由客户端请求。对齐 Tauri 官方 wdio 9 示例：仅用 tauri:options。
       // @ts-expect-error — tauri:options is a Tauri-specific WebDriver capability not in the standard types
       "tauri:options": {
         application: appBinary,
