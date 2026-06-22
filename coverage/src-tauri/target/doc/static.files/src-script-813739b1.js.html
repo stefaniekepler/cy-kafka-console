@@ -1,0 +1,85 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src-tauri/target/doc/static.files/src-script-813739b1.js</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../../prettify.css" />
+    <link rel="stylesheet" href="../../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../../index.html">All files</a> / <a href="index.html">src-tauri/target/doc/static.files</a> src-script-813739b1.js</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >"use strict";(function(){const rootPath=getVar("root-path");const NAME_OFFSET=0;const DIRS_OFFSET=1;const FILES_OFFSET=2;const RUSTDOC_MOBILE_BREAKPOINT=700;function closeSidebarIfMobile(){if(window.innerWidth&lt;RUSTDOC_MOBILE_BREAKPOINT){updateLocalStorage("source-sidebar-show","false");}}function createDirEntry(elem,parent,fullPath,hasFoundFile){const dirEntry=document.createElement("details");const summary=document.createElement("summary");dirEntry.className="dir-entry";fullPath+=elem[NAME_OFFSET]+"/";summary.innerText=elem[NAME_OFFSET];dirEntry.appendChild(summary);const folders=document.createElement("div");folders.className="folders";if(elem[DIRS_OFFSET]){for(const dir of elem[DIRS_OFFSET]){if(createDirEntry(dir,folders,fullPath,false)){dirEntry.open=true;hasFoundFile=true;}}}dirEntry.appendChild(folders);const files=document.createElement("div");files.className="files";if(elem[FILES_OFFSET]){const w=window.location.href.split("#")[0];for(const file_text of elem[FILES_OFFSET]){const file=document.createElement("a");file.innerText=file_text;file.href=rootPath+"src/"+fullPath+file_text+".html";file.addEventListener("click",closeSidebarIfMobile);if(!hasFoundFile&amp;&amp;w===file.href){file.className="selected";dirEntry.open=true;hasFoundFile=true;}files.appendChild(file);}}dirEntry.appendChild(files);parent.appendChild(dirEntry);return hasFoundFile;}window.rustdocCloseSourceSidebar=()=&gt;{removeClass(document.documentElement,"src-sidebar-expanded");updateLocalStorage("source-sidebar-show","false");};window.rustdocShowSourceSidebar=()=&gt;{addClass(document.documentElement,"src-sidebar-expanded");updateLocalStorage("source-sidebar-show","true");};window.rustdocToggleSrcSidebar=()=&gt;{if(document.documentElement.classList.contains("src-sidebar-expanded")){window.rustdocCloseSourceSidebar();}else{window.rustdocShowSourceSidebar();}};function createSrcSidebar(srcIndexStr){const container=nonnull(document.querySelector("nav.sidebar"));const sidebar=document.createElement("div");sidebar.id="src-sidebar";const srcIndex=new Map(JSON.parse(srcIndexStr));let hasFoundFile=false;for(const[key,source]of srcIndex){source[NAME_OFFSET]=key;hasFoundFile=createDirEntry(source,sidebar,"",hasFoundFile);}container.appendChild(sidebar);const selected_elem=sidebar.getElementsByClassName("selected")[0];if(typeof selected_elem!=="undefined"){selected_elem.focus();}}function highlightSrcLines(){const match=window.location.hash.match(/^#?(\d+)(?:-(\d+))?$/);if(!match){return;}let from=parseInt(match[1],10);let to=from;if(typeof match[2]!=="undefined"){to=parseInt(match[2],10);}if(to&lt;from){const tmp=to;to=from;from=tmp;}const from_s=""+from;let elem=document.getElementById(from_s);if(!elem){return;}const x=document.getElementById(from_s);if(x){x.scrollIntoView();}onEachLazy(document.querySelectorAll("a[data-nosnippet]"),e=&gt;{removeClass(e,"line-highlighted");});for(let i=from;i&lt;=to;++i){elem=document.getElementById(""+i);if(!elem){break;}addClass(elem,"line-highlighted");}}const handleSrcHighlight=(function(){let prev_line_id=0;const set_fragment=name=&gt;{const x=window.scrollX,y=window.scrollY;if(browserSupportsHistoryApi()){history.replaceState(null,"","#"+name);highlightSrcLines();}else{location.replace("#"+name);}window.scrollTo(x,y);};return ev=&gt;{let cur_line_id=parseInt(ev.target.id,10);if(isNaN(cur_line_id)||ev.ctrlKey||ev.altKey||ev.metaKey){return;}ev.preventDefault();if(ev.shiftKey&amp;&amp;prev_line_id){if(prev_line_id&gt;cur_line_id){const tmp=prev_line_id;prev_line_id=cur_line_id;cur_line_id=tmp;}set_fragment(prev_line_id+"-"+cur_line_id);}else{prev_line_id=cur_line_id;set_fragment(""+cur_line_id);}};}());window.addEventListener("hashchange",highlightSrcLines);onEachLazy(document.querySelectorAll("a[data-nosnippet]"),el=&gt;{el.addEventListener("click",handleSrcHighlight);});highlightSrcLines();window.createSrcSidebar=createSrcSidebar;})();</span></span></span></pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-06-19T03:59:27.736Z
+            </div>
+        <script src="../../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../../sorter.js"></script>
+        <script src="../../../../block-navigation.js"></script>
+    </body>
+</html>
+    
