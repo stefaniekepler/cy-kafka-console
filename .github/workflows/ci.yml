@@ -22,6 +22,11 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - name: 安装 cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
+      # rust job 仅做 fmt/clippy/单测，不需要真实 JRE/jar；但 tauri_build 在编译期会校验
+      # tauri.conf.json › bundle.resources 配置的路径必须存在，故用空占位目录骗过校验。
+      - name: 占位资源目录（满足 tauri_build 的 resources 路径校验）
+        shell: bash
+        run: mkdir -p resources/jre resources/kafbat
       - name: fmt
         run: cd src-tauri && cargo fmt --check
       - name: clippy

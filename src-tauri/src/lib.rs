@@ -9,8 +9,8 @@ pub mod resources;
 pub mod settings;
 pub mod sidecar;
 
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -76,6 +76,7 @@ fn record_and_show_error(handle: &tauri::AppHandle, msg: String) {
 /// 仅作用于顶栏 `[aria-label="Page Header"]`，不触碰页面其它内容：
 ///   1) 隐藏版本块（黄色"版本过期"感叹号 + commit 短哈希 + 构建时间）；
 ///   2) 隐藏主题切换之后的外部跳转入口（GitHub / Discord / ProductHunt），保留主题切换（非 <a>）。
+///
 /// CSS（`:has` 整块命中、响应式无闪烁）为主，JS 设 inline-style 作 CSP 兜底，
 /// MutationObserver 兜住版本信息异步加载与 SPA 路由重渲染。
 const UI_TWEAKS_JS: &str = r#"(function () {
@@ -166,7 +167,9 @@ fn launch_startup(handle: tauri::AppHandle) {
 
 #[tauri::command]
 fn get_max_heap() -> u32 {
-    paths::app_paths().map(|p| settings::read_max_heap(&p.settings_file)).unwrap_or(settings::DEFAULT_HEAP_MB)
+    paths::app_paths()
+        .map(|p| settings::read_max_heap(&p.settings_file))
+        .unwrap_or(settings::DEFAULT_HEAP_MB)
 }
 
 #[tauri::command]
@@ -261,11 +264,7 @@ fn spawn_update_check(handle: tauri::AppHandle) {
                 .blocking_show();
             let _ = tx.send(ok);
         });
-        if rx.recv().unwrap_or(false)
-            && update
-                .download_and_install(|_, _| {}, || {})
-                .await
-                .is_ok()
+        if rx.recv().unwrap_or(false) && update.download_and_install(|_, _| {}, || {}).await.is_ok()
         {
             handle.restart();
         }
@@ -297,7 +296,10 @@ fn spawn_watchdog(handle: tauri::AppHandle) {
             was
         };
         if already {
-            notify_fatal_and_exit(&handle, "后端进程多次异常退出，应用将关闭。请通过托盘菜单或日志排查。");
+            notify_fatal_and_exit(
+                &handle,
+                "后端进程多次异常退出，应用将关闭。请通过托盘菜单或日志排查。",
+            );
             return;
         }
         // 二次崩溃保护后，尝试重启一次
@@ -341,7 +343,12 @@ fn notify_fatal_and_exit(handle: &tauri::AppHandle, msg: &str) {
     let m = msg.to_string();
     let _ = handle.run_on_main_thread(move || {
         use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
-        let _ = h.dialog().message(m).title("Kafka Console").kind(MessageDialogKind::Error).blocking_show();
+        let _ = h
+            .dialog()
+            .message(m)
+            .title("Kafka Console")
+            .kind(MessageDialogKind::Error)
+            .blocking_show();
         h.exit(1);
     });
 }
@@ -385,7 +392,15 @@ pub fn run() {
 
     builder
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![get_startup_error, retry_startup, open_logs, open_config_dir, get_max_heap, set_max_heap, open_settings_window])
+        .invoke_handler(tauri::generate_handler![
+            get_startup_error,
+            retry_startup,
+            open_logs,
+            open_config_dir,
+            get_max_heap,
+            set_max_heap,
+            open_settings_window
+        ])
         .on_menu_event(|app, event| {
             if event.id() == "settings" {
                 let _ = open_settings_window(app.clone());
@@ -407,31 +422,31 @@ pub fn run() {
                 let show_i = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
                 let settings_i = MenuItem::with_id(app, "settings", "设置…", true, None::<&str>)?;
                 let sep = PredefinedMenuItem::separator(app)?;
-                let quit_i = MenuItem::with_id(app, "quit", "退出 Kafka Console", true, None::<&str>)?;
+                let quit_i =
+                    MenuItem::with_id(app, "quit", "退出 Kafka Console", true, None::<&str>)?;
                 let menu = Menu::with_items(app, &[&show_i, &settings_i, &sep, &quit_i])?;
                 let mut tray = TrayIconBuilder::new().tooltip("Kafka Console").menu(&menu);
                 if let Some(icon) = app.default_window_icon() {
                     tray = tray.icon(icon.clone());
                 }
-                tray
-                    .on_menu_event(|app, event| {
-                        if event.id() == "show" {
-                            if let Some(w) = app.get_webview_window("main") {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
-                        } else if event.id() == "settings" {
-                            let _ = open_settings_window(app.clone());
-                        } else if event.id() == "quit" {
-                            let st = app.state::<AppState>();
-                            st.shutting_down.store(true, Ordering::SeqCst);
-                            if let Some(mut p) = st.process.lock().unwrap().take() {
-                                let _ = p.terminate();
-                            }
-                            app.exit(0);
+                tray.on_menu_event(|app, event| {
+                    if event.id() == "show" {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
                         }
-                    })
-                    .build(app)?;
+                    } else if event.id() == "settings" {
+                        let _ = open_settings_window(app.clone());
+                    } else if event.id() == "quit" {
+                        let st = app.state::<AppState>();
+                        st.shutting_down.store(true, Ordering::SeqCst);
+                        if let Some(mut p) = st.process.lock().unwrap().take() {
+                            let _ = p.terminate();
+                        }
+                        app.exit(0);
+                    }
+                })
+                .build(app)?;
             }
 
             launch_startup(handle);
@@ -445,8 +460,7 @@ pub fn run() {
             }
             // 启动过程中用户手动关闭 splash（主窗口尚未出现）= 取消启动
             tauri::WindowEvent::Destroyed
-                if window.label() == "splash"
-                    && window.get_webview_window("main").is_none() =>
+                if window.label() == "splash" && window.get_webview_window("main").is_none() =>
             {
                 let st = window.state::<AppState>();
                 st.shutting_down.store(true, Ordering::SeqCst);
@@ -462,7 +476,10 @@ pub fn run() {
         .run(|app_handle, event| {
             // 兜底：无论经窗口关闭、Cmd+Q 还是 Dock 退出，都终止 JVM，杜绝孤儿进程
             if let tauri::RunEvent::Exit = event {
-                app_handle.state::<AppState>().shutting_down.store(true, Ordering::SeqCst);
+                app_handle
+                    .state::<AppState>()
+                    .shutting_down
+                    .store(true, Ordering::SeqCst);
                 if let Some(mut p) = app_handle
                     .state::<AppState>()
                     .process

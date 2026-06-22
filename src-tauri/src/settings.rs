@@ -39,7 +39,10 @@ mod tests {
     #[test]
     fn default_when_missing() {
         let tmp = tempfile::tempdir().unwrap();
-        assert_eq!(read_max_heap(&tmp.path().join("nope.json")), DEFAULT_HEAP_MB);
+        assert_eq!(
+            read_max_heap(&tmp.path().join("nope.json")),
+            DEFAULT_HEAP_MB
+        );
     }
     #[test]
     fn roundtrip() {
