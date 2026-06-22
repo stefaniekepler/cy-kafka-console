@@ -4,35 +4,167 @@
     <meta charset="UTF-8" />
     <title>Kafka Console</title>
     <style>
-      body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; margin: 0;
-             display: flex; align-items: center; justify-content: center; height: 100vh;
-             background: #1f2430; color: #e6e6e6; }
-      main { text-align: center; padding: 24px; max-width: 420px; }
-      h1 { font-size: 18px; margin: 0 0 12px; }
-      .spinner { width: 28px; height: 28px; margin: 16px auto 0; border: 3px solid #3a4150;
-                 border-top-color: #4f9cf9; border-radius: 50%; animation: spin 0.8s linear infinite; }
-      @keyframes spin { to { transform: rotate(360deg); } }
-      pre { text-align: left; background: #161a22; padding: 12px; border-radius: 6px;
-            max-height: 160px; overflow: auto; font-size: 12px; white-space: pre-wrap; }
-      button { margin: 6px; padding: 6px 16px; border: 0; border-radius: 6px; cursor: pointer;
-               background: #4f9cf9; color: #fff; }
-      button.secondary { background: #3a4150; }
+      :root {
+        color-scheme: light;
+        --bg: #f3f6fb;
+        --ink: #1f2430;
+        --muted: #6b7280;
+        --line: #e3e8f0;
+        --accent: #2f6df6;
+        --accent-2: #38bdf8;
+        --card: rgba(255, 255, 255, 0.72);
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+        margin: 0; height: 100vh; color: var(--ink);
+        display: flex; align-items: center; justify-content: center;
+        /* 极淡的双色光晕氛围，避免大面积纯色 */
+        background:
+          radial-gradient(120% 80% at 12% 0%, #eaf1ff 0%, rgba(234, 241, 255, 0) 55%),
+          radial-gradient(120% 90% at 100% 100%, #e6fbff 0%, rgba(230, 251, 255, 0) 50%),
+          var(--bg);
+        overflow: hidden;
+      }
+      main { width: 380px; max-width: calc(100vw - 32px); }
+
+      .card {
+        background: var(--card);
+        -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        border-radius: 18px; padding: 22px 24px 20px;
+        box-shadow: 0 18px 50px -22px rgba(31, 54, 100, 0.45), 0 2px 6px rgba(31, 54, 100, 0.06);
+      }
+
+      /* 品牌行 */
+      .brand { display: flex; align-items: center; gap: 10px; }
+      .mark {
+        width: 26px; height: 26px; border-radius: 8px; flex: none;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        box-shadow: 0 4px 12px -3px rgba(47, 109, 246, 0.6);
+        position: relative;
+      }
+      .mark::after { /* 简化的 Kafka 三节点意象 */
+        content: ""; position: absolute; inset: 0; margin: auto;
+        width: 11px; height: 11px;
+        background:
+          radial-gradient(circle at 50% 18%, #fff 0 2.1px, transparent 2.4px),
+          radial-gradient(circle at 16% 82%, #fff 0 2.1px, transparent 2.4px),
+          radial-gradient(circle at 84% 82%, #fff 0 2.1px, transparent 2.4px);
+      }
+      .brand h1 {
+        font-family: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+        font-size: 17px; letter-spacing: 0.2px; margin: 0; font-weight: 650;
+      }
+
+      /* 消息流管线动画：消息沿分区轨道从 producer 流向 consumer */
+      .pipeline {
+        margin: 18px 0 16px; height: 56px; position: relative;
+        display: flex; flex-direction: column; justify-content: space-between;
+      }
+      .lane { position: relative; height: 2px; border-radius: 2px; background: var(--line); overflow: visible; }
+      .packet {
+        position: absolute; top: 50%; left: 0; width: 30px; height: 4px; border-radius: 4px;
+        transform: translate(-40px, -50%);
+        /* 彗星拖尾：右端实心亮点、向左渐隐 */
+        background: linear-gradient(90deg, rgba(47, 109, 246, 0) 0%, var(--accent-2) 78%, var(--accent) 100%);
+        box-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
+        animation: flow 2.4s linear infinite;
+      }
+      .lane:nth-child(1) .packet { animation-duration: 2.2s; animation-delay: 0s; }
+      .lane:nth-child(2) .packet { animation-duration: 3.1s; animation-delay: 0.5s; }
+      .lane:nth-child(3) .packet { animation-duration: 2.6s; animation-delay: 1.1s; }
+      .lane .packet.b { animation-duration: 2.9s; animation-delay: 1.4s; opacity: 0.7; }
+      @keyframes flow {
+        0%   { transform: translate(-40px, -50%); opacity: 0; }
+        12%  { opacity: 1; }
+        88%  { opacity: 1; }
+        100% { transform: translate(380px, -50%); opacity: 0; }
+      }
+
+      /* 进度条 */
+      .progress { margin-top: 2px; }
+      .track {
+        position: relative; height: 7px; border-radius: 99px;
+        background: var(--line); overflow: hidden;
+      }
+      .bar {
+        position: absolute; inset: 0 auto 0 0; width: 0%;
+        border-radius: 99px;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .bar::after { /* 流动高光，呼应“消息流”主题 */
+        content: ""; position: absolute; inset: 0;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+        transform: translateX(-100%); animation: shimmer 1.6s ease-in-out infinite;
+      }
+      @keyframes shimmer { to { transform: translateX(100%); } }
+
+      .meta {
+        margin-top: 10px; display: flex; align-items: baseline; justify-content: space-between;
+        font-size: 12px; color: var(--muted);
+      }
+      .pct { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+
+      /* 入场编排：逐元素抬升淡入 */
+      .reveal { opacity: 0; transform: translateY(8px); animation: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+      .d1 { animation-delay: 0.04s; } .d2 { animation-delay: 0.16s; } .d3 { animation-delay: 0.28s; }
+      @keyframes rise { to { opacity: 1; transform: none; } }
+
+      /* 错误视图（浅色） */
+      #error h1 { font-size: 16px; margin: 0 0 10px; }
+      pre {
+        text-align: left; background: #fff; border: 1px solid var(--line);
+        padding: 12px; border-radius: 10px; max-height: 150px; overflow: auto;
+        font-size: 12px; white-space: pre-wrap; color: #b42318;
+      }
+      .hint { font-size: 12px; color: var(--muted); margin: 8px 0 14px; }
+      .actions { display: flex; gap: 8px; }
+      button {
+        padding: 7px 14px; border: 0; border-radius: 8px; cursor: pointer;
+        font-size: 13px; background: var(--accent); color: #fff;
+      }
+      button.secondary { background: #e7ecf5; color: var(--ink); }
+
+      @media (prefers-reduced-motion: reduce) {
+        .packet, .bar::after, .reveal { animation: none; }
+        .reveal { opacity: 1; transform: none; }
+      }
     </style>
   </head>
   <body>
     <main id="app">
-      <section id="loading">
-        <h1>Kafka Console</h1>
-        <p>正在启动后端服务…</p>
-        <div class="spinner"></div>
+      <section id="loading" class="card">
+        <div class="brand reveal d1">
+          <span class="mark"></span>
+          <h1>Kafka Console</h1>
+        </div>
+
+        <div class="pipeline reveal d2" aria-hidden="true">
+          <div class="lane"><span class="packet"></span><span class="packet b"></span></div>
+          <div class="lane"><span class="packet"></span></div>
+          <div class="lane"><span class="packet"></span></div>
+        </div>
+
+        <div class="progress reveal d3">
+          <div class="track"><div class="bar" id="bar"></div></div>
+          <div class="meta">
+            <span id="stage">Hey, just a moment......</span>
+            <span class="pct" id="pct">0%</span>
+          </div>
+        </div>
       </section>
-      <section id="error" hidden>
+
+      <section id="error" class="card" hidden>
         <h1>启动失败</h1>
         <pre id="error-detail"></pre>
-        <p>可重试，或查看日志后退出。</p>
-        <button id="retry">重试</button>
-        <button id="open-logs" class="secondary">打开日志</button>
-        <button id="quit" class="secondary">退出</button>
+        <p class="hint">可重试，或查看日志后退出。</p>
+        <div class="actions">
+          <button id="retry">重试</button>
+          <button id="open-logs" class="secondary">打开日志</button>
+          <button id="quit" class="secondary">退出</button>
+        </div>
       </section>
     </main>
     <script type="module" src="/src/splash.ts"></script>

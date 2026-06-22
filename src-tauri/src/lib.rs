@@ -183,7 +183,7 @@ fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
     }
     WebviewWindowBuilder::new(&app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Kafka Console 设置")
-        .inner_size(420.0, 260.0)
+        .inner_size(420.0, 380.0)
         .resizable(false)
         .center()
         .build()
@@ -201,10 +201,8 @@ fn retry_startup(app: tauri::AppHandle) {
     launch_startup(app);
 }
 
-#[tauri::command]
-fn open_logs() -> Result<(), String> {
-    let paths = paths::app_paths().map_err(|e| e.to_string())?;
-    let dir = paths.log_dir;
+/// 用系统文件管理器打开目录（macOS Finder / Windows 资源管理器 / Linux xdg-open）。
+fn reveal_dir(dir: &std::path::Path) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     let program = "open";
     #[cfg(target_os = "windows")]
@@ -212,10 +210,25 @@ fn open_logs() -> Result<(), String> {
     #[cfg(target_os = "linux")]
     let program = "xdg-open";
     std::process::Command::new(program)
-        .arg(&dir)
+        .arg(dir)
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+fn open_logs() -> Result<(), String> {
+    let paths = paths::app_paths().map_err(|e| e.to_string())?;
+    reveal_dir(&paths.log_dir)
+}
+
+/// 打开集群配置文件 dynamic_config.yaml 所在目录，便于备份/复制。
+#[tauri::command]
+fn open_config_dir() -> Result<(), String> {
+    let paths = paths::app_paths().map_err(|e| e.to_string())?;
+    // config_file = <data_root>/dynamic_config.yaml，其父目录即配置根目录
+    let dir = paths.config_file.parent().ok_or("无法定位配置目录")?;
+    reveal_dir(dir)
 }
 
 #[cfg(desktop)]
@@ -352,9 +365,32 @@ pub fn run() {
             .plugin(tauri_plugin_dialog::init());
     }
 
+    // macOS：在系统左上角应用菜单（“Kafka Console”下拉）里追加“设置…”。
+    // 基于 Menu::default 增量插入，保留默认的 Edit/Window 菜单，
+    // 否则整体替换会丢失这些项，导致 WebView 内 Cmd+C/V/A 等快捷键失效。
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.menu(|handle| {
+            use tauri::menu::{Menu, MenuItem, MenuItemKind};
+            let menu = Menu::default(handle)?;
+            let settings_i =
+                MenuItem::with_id(handle, "settings", "设置…", true, Some("CmdOrCtrl+,"))?;
+            if let Some(MenuItemKind::Submenu(app_menu)) = menu.items()?.into_iter().next() {
+                // 插在 About 之后（索引 1），符合 macOS 惯例
+                let _ = app_menu.insert(&settings_i, 1);
+            }
+            Ok(menu)
+        });
+    }
+
     builder
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![get_startup_error, retry_startup, open_logs, get_max_heap, set_max_heap, open_settings_window])
+        .invoke_handler(tauri::generate_handler![get_startup_error, retry_startup, open_logs, open_config_dir, get_max_heap, set_max_heap, open_settings_window])
+        .on_menu_event(|app, event| {
+            if event.id() == "settings" {
+                let _ = open_settings_window(app.clone());
+            }
+        })
         .setup(|app| {
             let handle = app.handle().clone();
             WebviewWindowBuilder::new(&handle, "splash", WebviewUrl::App("index.html".into()))

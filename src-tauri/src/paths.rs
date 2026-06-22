@@ -38,5 +38,7 @@ mod tests {
         assert!(p.log_dir.ends_with("logs"));
         assert!(p.settings_file.ends_with("settings.json"));
         assert!(p.config_file.starts_with("/data/app"));
+        // open_config_dir 依赖：配置目录 = config_file 的父目录 = 数据根目录
+        assert_eq!(p.config_file.parent().unwrap(), Path::new("/data/app"));
     }
 }

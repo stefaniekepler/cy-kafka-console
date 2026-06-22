@@ -2,12 +2,16 @@
 <html lang="zh-CN">
   <head><meta charset="UTF-8" /><title>设置</title>
     <style>
-      body{font-family:-apple-system,"Segoe UI",system-ui,sans-serif;margin:0;padding:24px;background:#1f2430;color:#e6e6e6}
+      :root{color-scheme:light}
+      body{font-family:-apple-system,"Segoe UI",system-ui,sans-serif;margin:0;padding:24px;background:#f5f6f8;color:#1f2430}
       h1{font-size:16px;margin:0 0 16px} label{display:block;font-size:13px;margin-bottom:6px}
-      input{width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid #3a4150;background:#161a22;color:#e6e6e6}
-      .hint{font-size:12px;color:#9aa4b2;margin-top:6px} .err{color:#ff6b6b}
+      input{width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid #c8ccd4;background:#ffffff;color:#1f2430}
+      .hint{font-size:12px;color:#6b7280;margin-top:6px} .err{color:#d92d20}
       .row{margin-top:16px;text-align:right} button{padding:6px 16px;border:0;border-radius:6px;cursor:pointer;background:#4f9cf9;color:#fff;margin-left:8px}
-      button.secondary{background:#3a4150}
+      button.secondary{background:#e4e7eb;color:#1f2430}
+      .section{margin-top:20px;padding-top:16px;border-top:1px solid #e4e7eb}
+      .section h1{margin-bottom:8px}
+      code{background:#eceff3;padding:1px 5px;border-radius:4px;font-size:12px}
     </style>
   </head>
   <body>
@@ -15,6 +19,13 @@
     <label for="heap">最大堆（MB，128–8192）</label>
     <input id="heap" type="number" min="128" max="8192" step="128" />
     <div class="hint" id="hint">修改后将在下次启动应用时生效。</div>
+
+    <div class="section">
+      <h1>本地配置</h1>
+      <div class="hint">集群配置保存在 <code>dynamic_config.yaml</code>。打开所在文件夹即可备份，或复制到其它机器（替换前请先退出应用）。</div>
+      <div style="margin-top:12px"><button class="secondary" id="open-config">打开本地配置路径</button></div>
+    </div>
+
     <div class="row">
       <button class="secondary" id="cancel">关闭</button>
       <button id="save">保存</button>

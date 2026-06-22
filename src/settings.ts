@@ -27,6 +27,8 @@ document.getElementById("save")?.addEventListener("click", async () => {
   }
 });
 
+document.getElementById("open-config")?.addEventListener("click", () => void invoke("open_config_dir"));
+
 document.getElementById("cancel")?.addEventListener("click", () => void getCurrentWindow().close());
 
 void load();

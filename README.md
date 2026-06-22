@@ -20,13 +20,13 @@ Kafka Console 是一款跨平台桌面应用，将 [kafbat-ui v1.5.0](https://gi
 
 从 [GitHub Releases](https://github.com/OWNER/cy-kafka-console/releases) 下载对应平台的安装包。
 
-### 首次运行提示（未签名/未公证二进制）
+### 首次运行提示（ad-hoc 签名 / 未公证二进制）
 
-**macOS（未公证）**，系统会阻止直接打开，任选其一：
+**macOS（ad-hoc 签名、未公证）**：发布包已对 `.app` 及内嵌 JRE 做 ad-hoc 代码签名，因此 **Apple Silicon (M 系列) 不会再报"已损坏，应移到废纸篓"**。但由于尚未经 Apple 公证，Gatekeeper 首次仍会拦截（提示"无法验证开发者"），任选其一放行：
 
-- 在 Finder 中右键点击应用 → **打开**
-- 在终端执行：`xattr -dr com.apple.quarantine "/Applications/Kafka Console.app"`
+- 在 Finder 中右键点击应用 → **打开**（最简单，仅首次需要）
 - 前往 **系统设置 → 隐私与安全性 → 仍要打开**
+- 在终端执行：`xattr -dr com.apple.quarantine "/Applications/Kafka Console.app"`
 
 **Windows（未签名）**，SmartScreen 弹出拦截界面时：
 
@@ -109,6 +109,55 @@ Kafka Console 是一款跨平台桌面应用，将 [kafbat-ui v1.5.0](https://gi
 产物位于 `src-tauri/target/release/bundle/`。
 
 > **注意（macOS headless 环境）：** 在无 GUI 会话的 macOS 机器上，DMG 打包步骤可能失败，但 `.app` 仍可正常生成。GitHub Actions 的 macOS runner 拥有 GUI 会话，可完整产出 DMG。
+
+---
+
+## 发布打包（触发 GitHub Actions）
+
+打包由 [`.github/workflows/release.yml`](.github/workflows/release.yml) 完成：**向 `origin` 推送 `v` 开头的 tag** 即触发，4 个平台并行构建，产物按系统版本命名（如 `Kafka-Console_<版本>_macos14_x64.dmg`、`Kafka-Console_<版本>_win11_x64-setup.exe`），并汇总上传为一个 **Release 草稿**。校验无误后到 GitHub Releases 手动 **Publish**，应用内自动更新才会生效。
+
+> tag 名与 `src-tauri/tauri.conf.json` 的 `version` 必须一致（如 tag `v0.2.0` ↔ `version: "0.2.0"`）——自动更新依据该版本号判断是否有新版。
+
+### 发布新版本
+
+```bash
+# 1. 先把 src-tauri/tauri.conf.json 的 version 改为新版本号并提交
+git add src-tauri/tauri.conf.json
+git commit -m "chore: release v0.2.0"
+
+# 2. 打 tag 并推送，触发打包
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+### 重新触发同一版本（重新 tag）
+
+改了构建脚本 / workflow 后想用**同一个版本号**重跑，需先删除旧 tag 再重新推送：
+
+```bash
+# 1. 删除远程 + 本地旧 tag
+git push origin --delete v0.1.0
+git tag -d v0.1.0
+
+# 2. 在当前提交重新打 tag 并推送，重新触发打包
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+> 重新推送同名 tag 会复用并**更新**已存在的草稿 Release（同名产物被覆盖）。若想要干净的 Release，建议先删掉旧草稿——装有 [GitHub CLI](https://cli.github.com/) 时一条命令即可删除 Release 并连带删除 tag：
+>
+> ```bash
+> gh release delete v0.1.0 --yes --cleanup-tag
+> # 之后再重新打 tag 并推送
+> git tag v0.1.0 && git push origin v0.1.0
+> ```
+
+### 查看构建状态
+
+```bash
+gh run list --workflow=release.yml   # 列出 Release workflow 的运行记录
+gh run watch                         # 实时跟踪最近一次运行
+```
 
 ---
 

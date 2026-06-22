@@ -1,6 +1,25 @@
 # ============================================================
 # 多平台发布流水线 — Kafka Console
 # ============================================================
+# 流程（两段式）：
+#   build  —— 4 平台并行：构建（仅构建、不发布）→ 按系统版本重命名产物
+#             → 收集 updater 元数据 → 上传为 workflow artifact。
+#   release —— 汇总所有平台产物 → 据「重命名后的文件名」重写 latest.json
+#             → 创建 GitHub Release 草稿并上传。
+#
+# 为什么要两段式：Tauri v2 不支持自定义产物文件名，而「包名体现系统版本」
+# 要求构建后重命名；Windows 的 *-setup.exe 同时是分发包与自动更新（updater）
+# 的下载源，重命名后必须据新文件名重写 latest.json，自动更新才不会失配。
+#
+# 自动更新（updater）已通过 tauri.conf.json › bundle.createUpdaterArtifacts:true 开启，
+# 构建时会产出 updater 工件：macOS *.app.tar.gz(+.sig)、Windows *-setup.exe(+.sig)、
+# Linux *.AppImage(+.sig)。latest.json 的 signature 取自对应 .sig 文件内容。
+#
+# 产物命名：<Kafka-Console>_<version>_<sys>_<arch><后缀>
+#   macOS(Intel)  Kafka-Console_<v>_macos14_x64.dmg        最低系统 macOS 14
+#   macOS(Apple)  Kafka-Console_<v>_macos14_aarch64.dmg
+#   Windows       Kafka-Console_<v>_win11_x64-setup.exe
+#   Linux         Kafka-Console_<v>_linux_amd64.AppImage / .deb
 #
 # 【首次发布前必须配置的 Secrets】
 #   TAURI_SIGNING_PRIVATE_KEY          — 更新器签名私钥（必需）
@@ -10,24 +29,15 @@
 #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD — 对应密钥的密码（必需）
 #
 # 【自动更新端点】
-#   tauri.conf.json › plugins.updater.endpoints 中的 OWNER 占位符
-#   必须替换为真实 GitHub 仓库所有者（个人或组织名），否则
-#   in-app updater 无法获取 latest.json，自动更新不会生效。
-#   示例：将 "OWNER" 改为 "my-org"。
+#   tauri.conf.json › plugins.updater.endpoints 必须指向本仓库的
+#   releases/latest/download/latest.json，且 Release 须为「已发布」（非草稿）
+#   才能被 latest 解析 —— 校验产物后取消草稿状态即可生效。
 #
 # 【可选的代码签名 Secrets（不配置仍可成功构建，但会有警告弹窗）】
 #   macOS（Gatekeeper）：
-#     APPLE_CERTIFICATE          — Base64 编码的 .p12 证书
-#     APPLE_CERTIFICATE_PASSWORD — .p12 证书密码
-#     APPLE_SIGNING_IDENTITY     — 签名身份字符串（Developer ID Application: ...）
-#     APPLE_ID                   — Apple ID 邮箱（用于公证 notarization）
-#     APPLE_PASSWORD             — App-specific password（appleid.apple.com 生成）
-#     APPLE_TEAM_ID              — Apple 开发者团队 ID
-#   Windows（SmartScreen）：
-#     （Tauri v2 Windows 签名通过 NSIS 安装程序自动处理，
-#      如需 EV 证书签名请参考 Tauri 官方文档配置 signtool 相关 secrets）
-#   未配置以上 secrets 时：构建照常完成，但用户首次安装时会收到
-#   Gatekeeper（macOS）或 SmartScreen（Windows）安全警告。
+#     APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY
+#     APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID（公证 notarization）
+#   未配置时：构建照常完成，但用户首次安装时会收到 Gatekeeper / SmartScreen 警告。
 # ============================================================
 
 name: Release
@@ -35,10 +45,11 @@ on:
   push:
     tags: ["v*"]
 
-# 允许 GITHUB_TOKEN 写仓库内容（创建 Release / 上传产物）。
-# 否则 tauri-action 创建 Release 时会报 “Resource not accessible by integration”。
 permissions:
   contents: write
+
+env:
+  PRODUCT_SLUG: Kafka-Console
 
 jobs:
   build:
@@ -46,18 +57,34 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # macOS Apple Silicon（arm64）
           - os: macos-14
             target: aarch64-apple-darwin
             bundles: dmg
+            platform: darwin-aarch64
+            sys_label: macos14
+            arch_label: aarch64
+          # macOS Intel（x86_64），最低系统 macOS 14（见 tauri.conf.json minimumSystemVersion）
           - os: macos-13
             target: x86_64-apple-darwin
             bundles: dmg
+            platform: darwin-x86_64
+            sys_label: macos14
+            arch_label: x64
+          # Windows（面向 win11）
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             bundles: nsis
+            platform: windows-x86_64
+            sys_label: win11
+            arch_label: x64
+          # Linux
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             bundles: appimage,deb
+            platform: linux-x86_64
+            sys_label: linux
+            arch_label: amd64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -90,19 +117,33 @@ jobs:
       - name: 构建 jlink JRE (Windows)
         if: runner.os == 'Windows'
         run: ./scripts/build-jre.ps1
+      - name: macOS ad-hoc 签名内嵌 JRE
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          # Apple Silicon 强制 arm64 二进制带有效签名，否则下载后报“已损坏”。
+          # 顶层 .app 由 Tauri 以 signingIdentity:"-" 做 ad-hoc 签名，但 Resources 内
+          # 的 jlink JRE（java / *.dylib / libjvm 等 Mach-O）不在其签名范围，需在打包前
+          # 逐个 ad-hoc 签名（inside-out 的内层）。纯 ad-hoc、不带 hardened runtime，
+          # 与 tauri.conf.json 的 hardenedRuntime:false 一致，避免 JVM 的 JIT 被禁。
+          count=0
+          while IFS= read -r -d '' f; do
+            if file "$f" | grep -q 'Mach-O'; then
+              codesign --force --timestamp=none --sign - "$f"
+              count=$((count+1))
+            fi
+          done < <(find resources/jre -type f -print0)
+          echo "已 ad-hoc 签名 $count 个 Mach-O 文件"
       - name: 安装前端依赖
         run: npm ci
-      - name: 构建并发布
+      - name: 构建（仅构建，不发布）
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # 更新器签名（必需，用于 latest.json 与自动更新）
+          # 更新器签名（必需）：构建时为 updater 工件生成 .sig
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # macOS 代码签名/公证：默认关闭 —— 产出未签名包（首次打开需右键→打开，或
-          # `xattr -dr com.apple.quarantine <App>`）。这样即使仓库里残留了空/无效的
-          # APPLE_CERTIFICATE secret，也不会触发 `security import` 而使 mac 构建失败。
-          # 需要签名时：取得 Developer ID Application 证书与公证凭据后，取消以下注释并配好对应 secrets。
+          # `xattr -dr com.apple.quarantine <App>`）。需要签名时取消注释并配好对应 secrets。
           # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -110,8 +151,66 @@ jobs:
           # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
+          # 不传 tagName：tauri-action 仅构建、不创建 Release（发布交给 release job）。
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
-          tagName: ${{ github.ref_name }}
-          releaseName: "Kafka Console ${{ github.ref_name }}"
-          releaseDraft: true
-          includeUpdaterJson: true
+      - name: 重命名产物并收集 updater 元数据
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BUNDLE_DIR="src-tauri/target/${{ matrix.target }}/release/bundle"
+          echo "=== bundle 目录产物（排查用）==="
+          find "$BUNDLE_DIR" -type f | sort
+          BUNDLE_DIR="$BUNDLE_DIR" OUT_DIR=dist-release SLUG="$PRODUCT_SLUG" \
+            VERSION="$VERSION" SYS_LABEL="${{ matrix.sys_label }}" \
+            ARCH_LABEL="${{ matrix.arch_label }}" PLATFORM="${{ matrix.platform }}" \
+            node scripts/rename-bundles.mjs
+          echo "=== dist-release 内容 ==="
+          ls -la dist-release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.platform }}
+          path: dist-release/
+          retention-days: 1
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 汇总所有平台产物
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-release
+          pattern: bundles-*
+          merge-multiple: true
+      - name: 列出汇总产物
+        run: ls -la dist-release
+      - name: 生成 latest.json（据重命名后的文件名）
+        env:
+          DIR: dist-release
+          TAG: ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          NOTES: "Kafka Console ${{ github.ref_name }}"
+        run: |
+          export VERSION="${GITHUB_REF_NAME#v}"
+          node scripts/make-latest-json.mjs
+      - name: 创建 Release 草稿并上传
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Kafka Console ${{ github.ref_name }}"
+          draft: true
+          fail_on_unmatched_files: false
+          files: |
+            dist-release/*.dmg
+            dist-release/*-setup.exe
+            dist-release/*.AppImage
+            dist-release/*.deb
+            dist-release/*.app.tar.gz
+            dist-release/latest.json
