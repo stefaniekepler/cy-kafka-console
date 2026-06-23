@@ -145,7 +145,14 @@ fn launch_startup(handle: tauri::AppHandle) {
                     {
                         Ok(_) => {
                             if let Some(s) = h.get_webview_window("splash") {
-                                let _ = s.close();
+                                // 通知 splash：后端已就绪、主窗口已建成（E2E 在此窗口上断言）。
+                                let _ = s.emit("startup-ready", ());
+                                // 生产：关闭 splash。E2E（KAFKA_CONSOLE_E2E 置位）：保留 splash 作为
+                                // WebDriver 稳定观测窗口——main 加载远程 kafbat-ui 且无 Tauri 能力，
+                                // tauri-driver 无法可靠驱动它，故断言必须落在受信的 splash 上。
+                                if std::env::var_os("KAFKA_CONSOLE_E2E").is_none() {
+                                    let _ = s.close();
+                                }
                             }
                             #[cfg(desktop)]
                             spawn_update_check(h.clone());

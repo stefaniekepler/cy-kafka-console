@@ -33,6 +33,9 @@ export const config: WebdriverIO.Config = {
   port: 4444,
 
   beforeSession: () => {
+    // 告知应用处于 E2E 模式：后端就绪后保留 splash 窗口（不关闭），作为 WebDriver
+    // 稳定观测窗口。tauri-driver 由本进程派生、再派生应用，故 env 会逐级继承下去。
+    process.env.KAFKA_CONSOLE_E2E = "1";
     // Spawn tauri-driver; it listens on port 4444 and proxies WebDriver commands to the app.
     tauriDriver = spawn("tauri-driver", [], {
       stdio: [null, process.stdout, process.stderr],

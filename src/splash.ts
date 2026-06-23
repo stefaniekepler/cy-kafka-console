@@ -51,6 +51,14 @@ function showLoading(): void {
 async function init(): Promise<void> {
   await listen<string>("startup-error", (e) => showError(e.payload));
 
+  // 后端就绪信号：进度补满并打上可被 E2E 断言的标记。生产环境下 Rust 随后会
+  // 关闭本窗口，标记不可见也无害；E2E 下本窗口保留，测试据此判断启动完成。
+  await listen("startup-ready", () => {
+    stopProgress();
+    render(1);
+    document.body.setAttribute("data-ready", "1");
+  });
+
   document.getElementById("retry")?.addEventListener("click", () => {
     showLoading();
     void invoke("retry_startup");
