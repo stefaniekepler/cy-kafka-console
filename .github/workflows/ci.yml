@@ -130,10 +130,12 @@ jobs:
       - name: 运行 E2E (Linux — Xvfb 无头显示)
         if: runner.os == 'Linux'
         env:
-          APP_BINARY: src-tauri/target/release/kafka-console
+          # 绝对路径：e2e 在 tests/e2e 下运行（cd tests/e2e），相对路径会解析错；二进制构建在仓库根。
+          APP_BINARY: ${{ github.workspace }}/src-tauri/target/release/kafka-console
         run: cd tests/e2e && xvfb-run -a npm test
       - name: 运行 E2E (Windows)
         if: runner.os == 'Windows'
         env:
-          APP_BINARY: src-tauri/target/release/kafka-console.exe
+          # 绝对路径：同上，e2e 在 tests/e2e 下运行，相对路径会解析错。
+          APP_BINARY: ${{ github.workspace }}/src-tauri/target/release/kafka-console.exe
         run: cd tests/e2e && npm test
