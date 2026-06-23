@@ -102,11 +102,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Linux 系统依赖（包含 WebKit WebDriver 与 Xvfb）
+      - name: Linux 系统依赖（包含 WebKit WebDriver、Xvfb 与托盘运行时库）
         if: runner.os == 'Linux'
+        # libayatana-appindicator3-1：应用启用了 tray-icon，启动时用 dlopen 加载托盘 .so，
+        # 缺它会运行期 panic（编译期不报错），导致进程崩溃、WebDriver 连不上而超时。
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev webkit2gtk-driver xvfb
+          sudo apt-get install -y libwebkit2gtk-4.1-dev webkit2gtk-driver xvfb libayatana-appindicator3-1
       - name: 安装 tauri-driver
         run: cargo install tauri-driver --locked
       - name: 拉 jar + jlink + 构建应用 (non-Windows)
